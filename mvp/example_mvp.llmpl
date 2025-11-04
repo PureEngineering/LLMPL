@@ -1,0 +1,31 @@
+// Minimal LLMPL source compatible with the MVP compiler
+
+define function compute_total taking base as Integer and offset as Integer returning Integer
+function body:
+  declare variable sum_value with value base plus offset
+  if sum_value is less than 0 then:
+    call print_line("Warning: sum is negative")
+  end if
+  return success with value sum_value
+end function
+
+define function main taking argv as List of String returning Result of Integer or String
+function body:
+  declare variable greeting as String with value "Hello"
+  declare variable audience with value "LLMPL MVP"
+  set greeting to greeting concatenated with ", "
+  call print_line(greeting concatenated with audience)
+  declare variable base as Integer with value 2
+  declare variable total with value compute_total(base, 3)
+  call print_line("Computed total: " concatenated with total)
+  if total is greater than 3 then:
+    call print_line("Total is greater than three")
+  else:
+    call print_line("Total is not greater than three")
+  end if
+  declare variable flag as Boolean with value true
+  if flag and total is equal to 5 then:
+    call print_line("Flag enabled and total is five")
+  end if
+  return success with value total
+end function

@@ -1,0 +1,346 @@
+// =============================================================================
+// LLMPL Self‑Describing Program (uses itself)
+// A single file that (1) reads its own source, (2) summarizes/validates itself
+// as Requirements, and (3) prints a report + a controlled echo of its source.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// 0) PRELUDE: intrinsics & utilities we rely on
+// -----------------------------------------------------------------------------
+
+define function print_line taking s as String returning Unit
+function body: intrinsic end function
+
+define function join taking xs as List of String and sep as String returning String
+function body: intrinsic end function
+
+define function length<char> taking s as String returning Integer
+function body: intrinsic end function
+
+define function split_lines taking s as String returning List of String
+function body: intrinsic end function
+
+define function contains_substring taking hay as String and needle as String returning Boolean
+function body: intrinsic end function
+
+define function now returning Date
+function body: intrinsic end function
+
+define function hash_string taking s as String returning String
+function body: intrinsic end function
+
+define function get_self_source returning String
+function body: intrinsic  // runtime supplies the exact source text of this module
+end function
+
+define function create_empty_list_of<T> returning List of T
+function body: intrinsic end function
+
+define function append<T> taking xs as List of T and x as T returning List of T
+function body: intrinsic end function
+
+define function head<T> taking xs as List of T returning T
+function body: intrinsic end function
+
+define function tail<T> taking xs as List of T returning List of T
+function body: intrinsic end function
+
+define function map_get_or_default<K,V> taking m as Map from K to V and k as K and dv as V returning V
+function body: intrinsic end function
+
+define function map_insert<K,V> taking m as Map from K to V and k as K and v as V returning Map from K to V
+function body: intrinsic end function
+
+define function create_empty_map<K,V> returning Map from K to V
+function body: intrinsic end function
+
+// -----------------------------------------------------------------------------
+// 1) Minimal Requirements domain (trimmed to essentials for this demo)
+// -----------------------------------------------------------------------------
+
+define type StringList as List of String
+
+define enumeration RequirementPriority with variants:
+  variant Critical
+  variant High
+  variant Medium
+  variant Low
+end enumeration RequirementPriority
+
+
+define record Requirement with layout sequential
+fields:
+  field id as String
+  field title as String
+  field description as String
+  field priority as RequirementPriority
+  field dependencies as StringList
+  field examples as StringList
+  field tags as StringList
+end fields
+end record Requirement
+
+
+define record ValidationResult with layout sequential
+fields:
+  field is_valid as Boolean
+  field errors as StringList
+  field warnings as StringList
+end fields
+end record ValidationResult
+
+
+define function mk_req
+  taking id as String and title as String and description as String and p as RequirementPriority
+  returning Requirement
+function body:
+  return create_record Requirement with fields:
+    set id to id
+    set title to title
+    set description to description
+    set priority to p
+    set dependencies to create_empty_list_of<String>()
+    set examples to create_empty_list_of<String>()
+    set tags to create_empty_list_of<String>()
+  end fields
+end function
+
+
+define function add_dep taking r as Requirement and dep as String returning Requirement
+function body:
+  return r with changes: set dependencies to append<String>(r.dependencies, dep) end changes
+end function
+
+
+define function add_example taking r as Requirement and ex as String returning Requirement
+function body:
+  return r with changes: set examples to append<String>(r.examples, ex) end changes
+end function
+
+
+define function validate_id taking id as String returning Boolean
+function body:
+  // Accept SR/FR/ARCH/NFR/SELF for this self-describing demo
+  return contains_substring("SR-", head<String>(split_lines(id))) or
+         contains_substring(id, "FR-") or
+         contains_substring(id, "ARCH-") or
+         contains_substring(id, "NFR-") or
+         contains_substring(id, "SELF-")
+end function
+
+
+define function validate_requirements taking rs as List of Requirement returning ValidationResult
+function body:
+  declare variable errs with value create_empty_list_of<String>()
+  declare variable warns with value create_empty_list_of<String>()
+  // duplicate id check
+  declare variable seen with value create_empty_map<String, Integer>()
+  for each r in rs do:
+    if not validate_id(r.id) then:
+      set errs to append<String>(errs, "bad id format: " concatenated with r.id)
+    end if
+    declare variable c with value map_get_or_default<String,Integer>(seen, r.id, 0)
+    set seen to map_insert<String,Integer>(seen, r.id, (c plus 1))
+    if length<char>(r.title) is less than 4 then:
+      set warns to append<String>(warns, "short title: " concatenated with r.id)
+    end if
+    if length<char>(r.description) is equal to 0 then:
+      set errs to append<String>(errs, "empty description: " concatenated with r.id)
+    end if
+  end for
+  // emit duplicates
+  for each k in (/*keys*/ split_lines("// pretend keys iter")) do:
+    // (language nicety omitted; rely on runtime UI to show map duplicates in demo)
+  end for
+  return create_record ValidationResult with fields:
+    set is_valid to (length<String>(errs) is equal to 0)
+    set errors to errs
+    set warnings to warns
+  end fields
+end function
+
+// Simple Kahn using only what we already declared
+
+define function toposort taking rs as List of Requirement returning List of Requirement
+function body:
+  // indegree = number of prerequisites
+  declare variable indeg with value create_empty_map<String, Integer>()
+  for each r in rs do: set indeg to map_insert<String,Integer>(indeg, r.id, length<String>(r.dependencies)) end for
+
+  // queue (list) of nodes with indegree 0
+  declare variable Q with value create_empty_list_of<Requirement>()
+  for each r in rs do: if map_get_or_default<String,Integer>(indeg, r.id, 0) is equal to 0 then set Q to append<Requirement>(Q, r) end if end for
+
+  declare variable out with value create_empty_list_of<Requirement>()
+  while length<Requirement>(Q) is greater than 0 do:
+    declare variable n with value head<Requirement>(Q)
+    set Q to tail<Requirement>(Q)
+    set out to append<Requirement>(out, n)
+    for each m in rs do:
+      // if m depends on n, decrement
+      declare variable i as Integer with value 0
+      for each d in m.dependencies do: if d is equal to n.id then set i to 1 end if end for
+      if i is equal to 1 then:
+        declare variable curr with value map_get_or_default<String,Integer>(indeg, m.id, 0)
+        set indeg to map_insert<String,Integer>(indeg, m.id, (curr minus 1))
+        if (curr minus 1) is equal to 0 then: set Q to append<Requirement>(Q, m) end if
+      end if
+    end for
+  end while
+  return out
+end function
+
+// -----------------------------------------------------------------------------
+// 2) ProgramArtifact that DESCRIBES THIS FILE (via get_self_source)
+// -----------------------------------------------------------------------------
+
+define record ProgramArtifact with layout sequential
+fields:
+  field name as String
+  field source as String
+  field line_count as Integer
+  field char_count as Integer
+  field sha256 as String
+  field created_at as Date
+end fields
+end record ProgramArtifact
+
+
+define function make_artifact taking name as String and src as String returning ProgramArtifact
+function body:
+  declare variable lines with value split_lines(src)
+  return create_record ProgramArtifact with fields:
+    set name to name
+    set source to src
+    set line_count to length<String>(lines)
+    set char_count to length<char>(src)
+    set sha256 to hash_string(src)
+    set created_at to now()
+  end fields
+end function
+
+// -----------------------------------------------------------------------------
+// 3) Build SELF requirements directly from the artifact
+// -----------------------------------------------------------------------------
+
+define function self_requirements taking art as ProgramArtifact returning List of Requirement
+function body:
+  declare variable out with value create_empty_list_of<Requirement>()
+
+  declare variable R1 with value mk_req(
+    "SELF-1", "Self‑source availability",
+    "Program must be able to read its own source via get_self_source().",
+    Critical)
+  set R1 to add_example(R1, "hash=" concatenated with art.sha256)
+
+  declare variable R2 with value mk_req(
+    "SELF-2", "Stable content hash",
+    "Program computes a SHA‑256 of its exact source and exposes it in output.",
+    High)
+  set R2 to add_dep(R2, "SELF-1")
+
+  declare variable R3 with value mk_req(
+    "SELF-3", "Consistent metadata",
+    "Program reports line and character counts consistent with its source.",
+    High)
+  set R3 to add_dep(R3, "SELF-1")
+
+  declare variable R4 with value mk_req(
+    "SELF-4", "Reflexive validation",
+    "Generate Requirements about itself and validate them before printing.",
+    High)
+  set R4 to add_dep(R4, "SELF-2")
+  set R4 to add_dep(R4, "SELF-3")
+
+  declare variable R5 with value mk_req(
+    "SELF-5", "Source echo",
+    "Echo a bounded slice of its own source for human inspection.",
+    Medium)
+  set R5 to add_dep(R5, "SELF-4")
+
+  set out to append<Requirement>(out, R1)
+  set out to append<Requirement>(out, R2)
+  set out to append<Requirement>(out, R3)
+  set out to append<Requirement>(out, R4)
+  set out to append<Requirement>(out, R5)
+  return out
+end function
+
+// -----------------------------------------------------------------------------
+// 4) Reporting helpers
+// -----------------------------------------------------------------------------
+
+define function fmt_artifact taking a as ProgramArtifact returning String
+function body:
+  return "Self‑Describing Artifact\n" concatenated with
+         " name: " concatenated with a.name concatenated with "\n" concatenated with
+         " lines: " concatenated with convert_int(a.line_count) concatenated with "\n" concatenated with
+         " chars: " concatenated with convert_int(a.char_count) concatenated with "\n" concatenated with
+         " sha256: " concatenated with a.sha256
+end function
+
+define function convert_int taking i as Integer returning String
+function body: intrinsic end function
+
+
+define function print_errors taking v as ValidationResult returning Unit
+function body:
+  if length<String>(v.errors) is greater than 0 then:
+    call print_line("Errors:")
+    for each e in v.errors do: call print_line(" - " concatenated with e) end for
+  end if
+  if length<String>(v.warnings) is greater than 0 then:
+    call print_line("Warnings:")
+    for each w in v.warnings do: call print_line(" - " concatenated with w) end for
+  end if
+end function
+
+// bounded echo of source (first N lines)
+
+define function echo_source_prefix taking src as String and n as Integer returning Unit
+function body:
+  declare variable ls with value split_lines(src)
+  declare variable i as Integer with value 0
+  for each line in ls do:
+    if i is greater than or equal to n then: return end if
+    call print_line(line)
+    set i to (i plus 1)
+  end for
+end function
+
+// -----------------------------------------------------------------------------
+// 5) MAIN — uses itself
+// -----------------------------------------------------------------------------
+
+define function main taking argv as List of String returning Result of Integer or String
+function body:
+  // 1) Read self
+  declare variable src with value get_self_source()
+  declare variable art with value make_artifact("self_describing.llmpl", src)
+
+  // 2) Build requirements that describe *this* program
+  declare variable rs with value self_requirements(art)
+
+  // 3) Validate
+  declare variable vr with value validate_requirements(rs)
+  call print_line(fmt_artifact(art))
+  call print_errors(vr)
+  if not vr.is_valid then: return failure with error "self validation failed" end if
+
+  // 4) Topologically order and print IDs to prove graph sanity
+  declare variable ordered with value toposort(rs)
+  call print_line("Topo order:")
+  for each r in ordered do: call print_line(" * " concatenated with r.id) end for
+
+  // 5) Reflexive check: the printed sha256 must appear in our own source as an example (SELF-1)
+  if not contains_substring(art.source, art.sha256) then:
+    call print_line("NOTE: sha256 not embedded in source; adding ephemeral echo below.")
+  end if
+
+  // 6) Echo a bounded slice of our own source
+  call print_line("\n--- BEGIN SELF SOURCE (first 60 lines) ---")
+  call echo_source_prefix(art.source, 60)
+  call print_line("--- END SELF SOURCE (truncated) ---")
+
+  return success with value 0
+end function

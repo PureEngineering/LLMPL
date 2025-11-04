@@ -1,0 +1,457 @@
+// =============================================================================
+// LLMPL Critical Requirements Definition
+// Defines the minimal set of "Must Have" requirements for LLMPL
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// 0) PRELUDE: intrinsics & utilities
+// -----------------------------------------------------------------------------
+
+define function print_line taking s as String returning Unit
+function body: intrinsic end function
+
+define function length<T> taking xs as List of T returning Integer
+function body: intrinsic end function
+
+define function append<T> taking xs as List of T and x as T returning List of T
+function body: intrinsic end function
+
+define function create_empty_list_of<T> returning List of T
+function body: intrinsic end function
+
+define function join taking xs as List of String and sep as String returning String
+function body: intrinsic end function
+
+define function contains_prefix taking s as String and prefix as String returning Boolean
+function body: intrinsic end function
+
+define function convert_int taking i as Integer returning String
+function body: intrinsic end function
+
+// -----------------------------------------------------------------------------
+// 1) Requirement Domain Types
+// -----------------------------------------------------------------------------
+
+define type StringList as List of String
+
+define enumeration RequirementPriority with variants:
+  variant Critical
+  variant High
+  variant Medium
+  variant Low
+end enumeration RequirementPriority
+
+define enumeration RequirementCategory with variants:
+  variant Syntax
+  variant Semantics
+  variant Architecture
+  variant NonFunctional
+end enumeration RequirementCategory
+
+define record Requirement with layout sequential
+fields:
+  field id as String
+  field title as String
+  field description as String
+  field rationale as String
+  field priority as RequirementPriority
+  field category as RequirementCategory
+  field dependencies as StringList
+  field examples as StringList
+  field antipatterns as StringList
+end fields
+end record Requirement
+
+define record RequirementSet with layout sequential
+fields:
+  field name as String
+  field version as String
+  field requirements as List of Requirement
+  field total_count as Integer
+  field critical_count as Integer
+end fields
+end record RequirementSet
+
+// -----------------------------------------------------------------------------
+// 2) Helper Functions
+// -----------------------------------------------------------------------------
+
+define function create_requirement
+  taking id as String 
+  and title as String 
+  and desc as String 
+  and rationale as String
+  and priority as RequirementPriority
+  and category as RequirementCategory
+  returning Requirement
+function body:
+  return create_record Requirement with fields:
+    set id to id
+    set title to title
+    set description to desc
+    set rationale to rationale
+    set priority to priority
+    set category to category
+    set dependencies to create_empty_list_of<String>()
+    set examples to create_empty_list_of<String>()
+    set antipatterns to create_empty_list_of<String>()
+  end fields
+end function
+
+define function add_dependency taking req as Requirement and dep_id as String returning Requirement
+function body:
+  return req with changes: 
+    set dependencies to append<String>(req.dependencies, dep_id) 
+  end changes
+end function
+
+define function add_example taking req as Requirement and example as String returning Requirement
+function body:
+  return req with changes: 
+    set examples to append<String>(req.examples, example) 
+  end changes
+end function
+
+define function add_antipattern taking req as Requirement and anti as String returning Requirement
+function body:
+  return req with changes: 
+    set antipatterns to append<String>(req.antipatterns, anti) 
+  end changes
+end function
+
+define function count_critical taking reqs as List of Requirement returning Integer
+function body:
+  declare variable count as Integer with value 0
+  for each req in reqs do:
+    match req.priority with cases:
+      case Critical: set count to (count plus 1)
+      case High: // do nothing
+      case Medium: // do nothing
+      case Low: // do nothing
+    end cases
+  end for
+  return count
+end function
+
+// -----------------------------------------------------------------------------
+// 3) Core Critical Requirements Definition
+// -----------------------------------------------------------------------------
+
+define function define_critical_requirements returning List of Requirement
+function body:
+  declare variable reqs with value create_empty_list_of<Requirement>()
+  
+  // ARCH-1.0: Formal Deterministic Grammar
+  declare variable arch1 with value create_requirement(
+    "ARCH-1.0",
+    "Formal Deterministic Grammar",
+    "The language grammar must be formal, unambiguous, and deterministic (e.g., LALR(1) or similar), capable of being parsed by a standard, high-performance deterministic parser.",
+    "Deterministic parsing ensures that every program has exactly one parse tree, eliminating ambiguity that LLMs might exploit or misunderstand. This architectural decision explicitly rejects tolerant parsing approaches that guess at programmer intent.",
+    Critical,
+    Architecture)
+  
+  set arch1 to add_example(arch1, "Grammar uses LALR(1) parser generator")
+  set arch1 to add_example(arch1, "Every construct has exactly one valid parse")
+  set arch1 to add_antipattern(arch1, "Tolerant parsing that guesses missing delimiters")
+  set arch1 to add_antipattern(arch1, "Context-sensitive parsing requiring semantic analysis")
+  
+  set reqs to append<Requirement>(reqs, arch1)
+
+  // ARCH-2.0: Canonical Intermediate Representation
+  declare variable arch2 with value create_requirement(
+    "ARCH-2.0",
+    "Canonical Intermediate Representation",
+    "The compiler pipeline must operate on a single, canonical intermediate representation (IR) that is stable, lossless, and available to tooling between compiler phases.",
+    "LLMs and humans alike need a dependable view of program structure. A canonical IR makes semantic intent explicit, enables high-fidelity analysis, and allows deterministic diffing when the LLM revises its output.",
+    Critical,
+    Architecture)
+  
+  set arch2 to add_dependency(arch2, "ARCH-1.0")
+  set arch2 to add_example(arch2, "Parser, type checker, and code generator share the same IR schema")
+  set arch2 to add_example(arch2, "IR can be serialized for debugging and fed back into the LLM unmodified")
+  set arch2 to add_example(arch2, "IR nodes carry explicit type and control-flow metadata")
+  set arch2 to add_antipattern(arch2, "Multiple ad-hoc AST representations with inconsistent fields")
+  set arch2 to add_antipattern(arch2, "Hidden compiler passes that mutate semantics without trace")
+  set arch2 to add_antipattern(arch2, "IR transformations that drop type information or source ranges")
+  
+  set reqs to append<Requirement>(reqs, arch2)
+  
+  // SR-1: Context-Rich Delimiters
+  declare variable sr1 with value create_requirement(
+    "SR-1",
+    "Context-Rich Delimiters",
+    "Every block opening must use a unique, context-specific delimiter that explicitly includes the block type. Each closing delimiter must explicitly name what it closes.",
+    "When LLMs generate nested code, they can lose track of which closing delimiter corresponds to which opening. By requiring 'end function', 'end if', 'end for', etc., the LLM and human readers can immediately identify mismatched blocks.",
+    Critical,
+    Syntax)
+  
+  set sr1 to add_dependency(sr1, "ARCH-1.0")
+  set sr1 to add_example(sr1, "function body: ... end function")
+  set sr1 to add_example(sr1, "if condition then: ... end if")
+  set sr1 to add_example(sr1, "for each x in xs do: ... end for")
+  set sr1 to add_example(sr1, "match value with cases: ... end cases")
+  set sr1 to add_antipattern(sr1, "Using generic '}' for all block types")
+  set sr1 to add_antipattern(sr1, "Using whitespace-based indentation for structure")
+  
+  set reqs to append<Requirement>(reqs, sr1)
+  
+  // SR-3: No Symbol Overloading
+  declare variable sr3 with value create_requirement(
+    "SR-3",
+    "No Symbol Overloading",
+    "Each symbolic character must have exactly one syntactic purpose across the entire language. No operator or punctuation may serve multiple distinct roles.",
+    "LLMs are trained on natural text where symbols like '*' mean multiplication, emphasis, bullets, or pointers depending on context. Symbol overloading creates ambiguity that LLMs struggle with. Using unique keywords eliminates this confusion.",
+    Critical,
+    Syntax)
+  
+  set sr3 to add_dependency(sr3, "ARCH-1.0")
+  set sr3 to add_example(sr3, "Use 'plus' instead of '+' which could mean addition or concatenation")
+  set sr3 to add_example(sr3, "Use 'is equal to' instead of '==' or '='")
+  set sr3 to add_example(sr3, "Use 'concatenated with' instead of '+' for strings")
+  set sr3 to add_example(sr3, "Use 'taking' and 'returning' instead of ':' for types")
+  set sr3 to add_antipattern(sr3, "Using '*' for both multiplication and pointers")
+  set sr3 to add_antipattern(sr3, "Using ':' for type annotations, dictionary literals, and slicing")
+  set sr3 to add_antipattern(sr3, "Using '&' for both bitwise AND and references")
+  
+  set reqs to append<Requirement>(reqs, sr3)
+  
+  // SR-6: No Implicit Conversions Ever
+  declare variable sr6 with value create_requirement(
+    "SR-6",
+    "No Implicit Conversions Ever",
+    "There must be zero implicit type conversions in the language. Every type change must be explicit through a named conversion function.",
+    "Implicit conversions are a major source of bugs where LLMs generate code that compiles but produces unexpected results (like '5' + 3 in JavaScript). By requiring explicit conversions, type mismatches become compile-time errors rather than runtime surprises.",
+    Critical,
+    Semantics)
+  
+  set sr6 to add_dependency(sr6, "ARCH-1.0")
+  set sr6 to add_example(sr6, "Must write convert_int(value) to convert Integer to String")
+  set sr6 to add_example(sr6, "Cannot add Integer and Float without explicit conversion")
+  set sr6 to add_example(sr6, "Boolean does not convert to Integer (no true=1, false=0)")
+  set sr6 to add_antipattern(sr6, "JavaScript-style '5' + 3 = '53'")
+  set sr6 to add_antipattern(sr6, "C-style pointer-to-boolean conversions")
+  set sr6 to add_antipattern(sr6, "Python-style truthiness of empty collections")
+  
+  set reqs to append<Requirement>(reqs, sr6)
+  
+  // SR-10: No Silent Failures
+  declare variable sr10 with value create_requirement(
+    "SR-10",
+    "No Silent Failures",
+    "Every operation that can fail must return a dedicated Result type. Exceptions, panics, and undefined behavior are forbidden. Errors must be visible in the function signature.",
+    "LLMs often forget error handling. By making errors part of the type signature, the type system forces the LLM to handle failures explicitly. The compiler rejects any code that ignores a Result value.",
+    Critical,
+    Semantics)
+  
+  set sr10 to add_dependency(sr10, "ARCH-1.0")
+  set sr10 to add_dependency(sr10, "SR-11")
+  set sr10 to add_example(sr10, "Function returns 'Result of T or ErrorType'")
+  set sr10 to add_example(sr10, "Must match on Result: success with value or failure with error")
+  set sr10 to add_example(sr10, "Division by zero returns Result, not exception")
+  set sr10 to add_example(sr10, "File operations return Result of data or IOError")
+  set sr10 to add_antipattern(sr10, "Throwing exceptions that bypass type signatures")
+  set sr10 to add_antipattern(sr10, "Returning null/nil for errors")
+  set sr10 to add_antipattern(sr10, "Undefined behavior for out-of-bounds access")
+  
+  set reqs to append<Requirement>(reqs, sr10)
+  
+  // SR-11: Exhaustive Pattern Matching
+  declare variable sr11 with value create_requirement(
+    "SR-11",
+    "Exhaustive Pattern Matching",
+    "All pattern matches must be exhaustive. Every possible case must be handled explicitly. Non-exhaustive matches must result in a compilation error.",
+    "LLMs frequently generate code that handles the happy path but forgets edge cases. Exhaustive matching forces every variant of an enumeration or Result type to be handled, turning forgotten cases into compile-time errors instead of runtime crashes.",
+    Critical,
+    Semantics)
+  
+  set sr11 to add_dependency(sr11, "ARCH-1.0")
+  set sr11 to add_example(sr11, "Match on enumeration must cover all variants")
+  set sr11 to add_example(sr11, "Match on Result must handle both success and failure")
+  set sr11 to add_example(sr11, "Compiler error if any case is missing")
+  set sr11 to add_antipattern(sr11, "Switch statements with missing cases and no default")
+  set sr11 to add_antipattern(sr11, "Pattern matching with catch-all that hides bugs")
+  
+  set reqs to append<Requirement>(reqs, sr11)
+
+  // NFR-1: Transparent Diagnostics
+  declare variable nfr1 with value create_requirement(
+    "NFR-1",
+    "Transparent Diagnostics",
+    "The toolchain must emit deterministic, structured diagnostics that communicate failure conditions in both human-readable and machine-consumable formats.",
+    "LLM-assisted development depends on precise, reproducible feedback loops. Rich diagnostics enable the LLM to self-correct and allow engineers to trust that enforcement is both strict and explainable.",
+    Critical,
+    NonFunctional)
+  
+  set nfr1 to add_dependency(nfr1, "ARCH-1.0")
+  set nfr1 to add_dependency(nfr1, "ARCH-2.0")
+  set nfr1 to add_example(nfr1, "Every compiler error provides location, snippet, and suggested remediation")
+  set nfr1 to add_example(nfr1, "Diagnostics are exported as JSON with stable schema for tooling")
+  set nfr1 to add_example(nfr1, "Build logs emit in deterministic order across runs")
+  set nfr1 to add_antipattern(nfr1, "Generic 'syntax error' messages without actionable detail")
+  set nfr1 to add_antipattern(nfr1, "Diagnostics that differ between CLI and IDE integrations")
+  set nfr1 to add_antipattern(nfr1, "Non-deterministic or stateful error reporting that confuses LLM retries")
+  
+  set reqs to append<Requirement>(reqs, nfr1)
+  
+  // Validate identifiers before returning
+  declare variable validated_reqs with value create_empty_list_of<Requirement>()
+  for each req in reqs do:
+    declare variable id_is_valid as Boolean with value validate_requirement_id(req.id)
+    match id_is_valid with cases:
+      case true: // OK
+      case false:
+        call print_line("WARNING: Requirement uses unsupported identifier prefix -> " concatenated with req.id)
+    end cases
+    set validated_reqs to append<Requirement>(validated_reqs, req)
+  end for
+  
+  return validated_reqs
+end function
+
+// -----------------------------------------------------------------------------
+// 4) Validation & Reporting
+// -----------------------------------------------------------------------------
+
+define function validate_requirement_id taking id as String returning Boolean
+function body:
+  // Simple validation: must start with known prefix
+  declare variable valid as Boolean with value false
+  if contains_prefix(id, "ARCH-") then: set valid to true end if
+  if contains_prefix(id, "SR-") then: set valid to true end if
+  if contains_prefix(id, "FR-") then: set valid to true end if
+  if contains_prefix(id, "NFR-") then: set valid to true end if
+  return valid
+end function
+
+define function create_requirement_set 
+  taking name as String and version as String and reqs as List of Requirement 
+  returning RequirementSet
+function body:
+  return create_record RequirementSet with fields:
+    set name to name
+    set version to version
+    set requirements to reqs
+    set total_count to length<Requirement>(reqs)
+    set critical_count to count_critical(reqs)
+  end fields
+end function
+
+define function print_requirement taking req as Requirement returning Unit
+function body:
+  call print_line("================================================================================")
+  call print_line(req.id concatenated with ": " concatenated with req.title)
+  call print_line("================================================================================")
+  call print_line("")
+  call print_line("Priority: " concatenated with format_priority(req.priority))
+  call print_line("Category: " concatenated with format_category(req.category))
+  call print_line("")
+  call print_line("Description:")
+  call print_line("  " concatenated with req.description)
+  call print_line("")
+  call print_line("Rationale:")
+  call print_line("  " concatenated with req.rationale)
+  call print_line("")
+  
+  if length<String>(req.dependencies) is greater than 0 then:
+    call print_line("Dependencies:")
+    for each dep in req.dependencies do:
+      call print_line("  - " concatenated with dep)
+    end for
+    call print_line("")
+  end if
+  
+  if length<String>(req.examples) is greater than 0 then:
+    call print_line("Examples:")
+    for each ex in req.examples do:
+      call print_line("  + " concatenated with ex)
+    end for
+    call print_line("")
+  end if
+  
+  if length<String>(req.antipatterns) is greater than 0 then:
+    call print_line("Anti-patterns (What to Avoid):")
+    for each anti in req.antipatterns do:
+      call print_line("  × " concatenated with anti)
+    end for
+    call print_line("")
+  end if
+end function
+
+define function format_priority taking p as RequirementPriority returning String
+function body:
+  match p with cases:
+    case Critical: return "CRITICAL (Must Have)"
+    case High: return "High"
+    case Medium: return "Medium"
+    case Low: return "Low"
+  end cases
+end function
+
+define function format_category taking c as RequirementCategory returning String
+function body:
+  match c with cases:
+    case Syntax: return "Syntax Rule"
+    case Semantics: return "Semantic Rule"
+    case Architecture: return "Architectural Decision"
+    case NonFunctional: return "Non-Functional Requirement"
+  end cases
+end function
+
+define function print_requirement_set_summary taking rs as RequirementSet returning Unit
+function body:
+  call print_line("=============================================================================")
+  call print_line("LLMPL Requirements Document")
+  call print_line("=============================================================================")
+  call print_line("")
+  call print_line("Name: " concatenated with rs.name)
+  call print_line("Version: " concatenated with rs.version)
+  call print_line("Total Requirements: " concatenated with convert_int(rs.total_count))
+  call print_line("Critical Requirements: " concatenated with convert_int(rs.critical_count))
+  call print_line("")
+  call print_line("This document defines the minimal set of CRITICAL requirements that form")
+  call print_line("the foundation of LLMPL - a programming language designed specifically to")
+  call print_line("enable reliable code generation by Large Language Models.")
+  call print_line("")
+  call print_line("The core philosophy: shift the burden of correctness from the LLM's")
+  call print_line("generative capacity to strict, verifiable checks performed by the compiler.")
+  call print_line("")
+  call print_line("Coverage spans architecture, syntax, semantics, and non-functional guardrails.")
+  call print_line("These facets work together to keep the LLM feedback loop precise and observable.")
+  call print_line("")
+  call print_line("=============================================================================")
+  call print_line("")
+end function
+
+// -----------------------------------------------------------------------------
+// 5) MAIN
+// -----------------------------------------------------------------------------
+
+define function main taking argv as List of String returning Result of Integer or String
+function body:
+  // Define all critical requirements
+  declare variable critical_reqs with value define_critical_requirements()
+  
+  // Create requirement set
+  declare variable req_set with value create_requirement_set(
+    "LLMPL Core Critical Requirements",
+    "1.0",
+    critical_reqs)
+  
+  // Print summary
+  call print_requirement_set_summary(req_set)
+  
+  // Print each requirement in detail
+  for each req in critical_reqs do:
+    call print_requirement(req)
+  end for
+  
+  // Final summary
+  call print_line("=============================================================================")
+  call print_line("END OF REQUIREMENTS DOCUMENT")
+  call print_line("=============================================================================")
+  call print_line("")
+  call print_line("These " concatenated with convert_int(req_set.critical_count) concatenated with " critical requirements form the non-negotiable foundation of LLMPL.")
+  call print_line("All other language features must be designed in harmony with these principles.")
+  
+  return success with value 0
+end function

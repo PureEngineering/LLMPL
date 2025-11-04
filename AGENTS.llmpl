@@ -1,0 +1,1175 @@
+// =============================================================================
+// LLMPL Agent Guidelines - Meta Programming with LLMPL
+// Describes how LLM agents should approach writing LLMPL code
+// A self-referential guide: LLMPL code describing how to write LLMPL code
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// 0) PRELUDE: intrinsics & utilities
+// -----------------------------------------------------------------------------
+
+define function print_line taking s as String returning Unit
+function body: intrinsic end function
+
+define function length<T> taking xs as List of T returning Integer
+function body: intrinsic end function
+
+define function append<T> taking xs as List of T and x as T returning List of T
+function body: intrinsic end function
+
+define function create_empty_list_of<T> returning List of T
+function body: intrinsic end function
+
+define function join taking xs as List of String and sep as String returning String
+function body: intrinsic end function
+
+define function convert_int taking i as Integer returning String
+function body: intrinsic end function
+
+// -----------------------------------------------------------------------------
+// 1) Agent Domain Types
+// -----------------------------------------------------------------------------
+
+define type StringList as List of String
+
+define enumeration AgentRole with variants:
+  variant CodeGenerator
+  variant SyntaxValidator
+  variant SemanticAnalyzer
+  variant RefactoringAgent
+  variant DocumentationWriter
+end enumeration AgentRole
+
+define enumeration StrategyPhase with variants:
+  variant Planning
+  variant Generation
+  variant Validation
+  variant Refinement
+end enumeration StrategyPhase
+
+define enumeration ComplianceLevel with variants:
+  variant FullyCompliant
+  variant MinorViolation
+  variant MajorViolation
+  variant CriticalFailure
+end enumeration ComplianceLevel
+
+define record AgentGuideline with layout sequential
+fields:
+  field id as String
+  field role as AgentRole
+  field phase as StrategyPhase
+  field title as String
+  field description as String
+  field rationale as String
+  field examples as StringList
+  field common_mistakes as StringList
+  field verification_steps as StringList
+end fields
+end record AgentGuideline
+
+define record AgentStrategy with layout sequential
+fields:
+  field name as String
+  field role as AgentRole
+  field guidelines as List of AgentGuideline
+  field prerequisite_knowledge as StringList
+  field success_criteria as StringList
+  field compliance_checks as List of ComplianceCheck
+end fields
+end record AgentStrategy
+
+define record ComplianceCheck with layout sequential
+fields:
+  field guideline_id as String
+  field requirement_id as String
+  field check_description as String
+  field is_automated as Boolean
+  field severity as ComplianceLevel
+end fields
+end record ComplianceCheck
+
+// -----------------------------------------------------------------------------
+// 2) Helper Functions
+// -----------------------------------------------------------------------------
+
+define function create_guideline
+  taking id as String
+  and role as AgentRole
+  and phase as StrategyPhase
+  and title as String
+  and desc as String
+  and rationale as String
+  returning AgentGuideline
+function body:
+  return create_record AgentGuideline with fields:
+    set id to id
+    set role to role
+    set phase to phase
+    set title to title
+    set description to desc
+    set rationale to rationale
+    set examples to create_empty_list_of<String>()
+    set common_mistakes to create_empty_list_of<String>()
+    set verification_steps to create_empty_list_of<String>()
+  end fields
+end function
+
+define function add_example taking guide as AgentGuideline and ex as String returning AgentGuideline
+function body:
+  return guide with changes:
+    set examples to append<String>(guide.examples, ex)
+  end changes
+end function
+
+define function add_mistake taking guide as AgentGuideline and mistake as String returning AgentGuideline
+function body:
+  return guide with changes:
+    set common_mistakes to append<String>(guide.common_mistakes, mistake)
+  end changes
+end function
+
+define function add_verification taking guide as AgentGuideline and step as String returning AgentGuideline
+function body:
+  return guide with changes:
+    set verification_steps to append<String>(guide.verification_steps, step)
+  end changes
+end function
+
+define function string_list_contains taking xs as StringList and target as String returning Boolean
+function body:
+  declare variable found as Boolean with value false
+  for each item in xs do:
+    if item is equal to target then:
+      set found to true
+    end if
+  end for
+  return found
+end function
+
+define function append_unique_string taking xs as StringList and target as String returning StringList
+function body:
+  if string_list_contains(xs, target) is equal to true then:
+    return xs
+  end if
+  return append<String>(xs, target)
+end function
+
+// -----------------------------------------------------------------------------
+// 3) Code Generation Guidelines for LLM Agents
+// -----------------------------------------------------------------------------
+
+define function define_code_generator_guidelines returning List of AgentGuideline
+function body:
+  declare variable guides with value create_empty_list_of<AgentGuideline>()
+  
+  // AGENT-GEN-1: Always Start with Type Definitions
+  declare variable gen1 with value create_guideline(
+    "AGENT-GEN-1",
+    CodeGenerator,
+    Planning,
+    "Define Types Before Functions",
+    "Always define all record types, enumerations, and type aliases before writing functions that use them. This ensures the type system can validate all references.",
+    "LLMPL is strongly typed. Forward references are not permitted. By defining types first, you leverage the compiler to catch type errors immediately rather than discovering them late in generation.",
+    CodeGenerator)
+  
+  set gen1 to add_example(gen1, "define enumeration MyEnum ... end enumeration MyEnum")
+  set gen1 to add_example(gen1, "define record MyRecord ... end record MyRecord")
+  set gen1 to add_example(gen1, "define type MyAlias as List of String")
+  set gen1 to add_mistake(gen1, "Writing function that uses MyRecord before defining MyRecord")
+  set gen1 to add_mistake(gen1, "Assuming forward declarations work like in C")
+  set gen1 to add_verification(gen1, "Ensure all type names used in function signatures are defined above")
+  set gen1 to add_verification(gen1, "Check that no undefined type appears in field declarations")
+  
+  set guides to append<AgentGuideline>(guides, gen1)
+  
+  // AGENT-GEN-2: Use Context-Rich Delimiters Always
+  declare variable gen2 with value create_guideline(
+    "AGENT-GEN-2",
+    CodeGenerator,
+    Generation,
+    "Match Every Opening with Explicit Closing",
+    "Every block opening MUST be matched with its corresponding context-specific closing delimiter. Never use generic closing syntax.",
+    "This is SR-1 in action. When you generate nested structures, track what you opened and close it explicitly. This prevents the common LLM error of losing track of nesting depth.",
+    CodeGenerator)
+  
+  set gen2 to add_example(gen2, "function body: ... end function")
+  set gen2 to add_example(gen2, "if X then: ... end if")
+  set gen2 to add_example(gen2, "for each x in xs do: ... end for")
+  set gen2 to add_example(gen2, "match v with cases: ... end cases")
+  set gen2 to add_example(gen2, "fields: ... end fields")
+  set gen2 to add_mistake(gen2, "Closing with generic 'end' without context")
+  set gen2 to add_mistake(gen2, "Using 'end if' to close a for loop")
+  set gen2 to add_mistake(gen2, "Forgetting to close deeply nested blocks")
+  set gen2 to add_verification(gen2, "Count opening keywords and verify matching closing keywords")
+  set gen2 to add_verification(gen2, "Use indentation as a visual aid but verify explicit delimiters")
+  
+  set guides to append<AgentGuideline>(guides, gen2)
+  
+  // AGENT-GEN-3: No Operator Overloading - Use Keywords
+  declare variable gen3 with value create_guideline(
+    "AGENT-GEN-3",
+    CodeGenerator,
+    Generation,
+    "Always Use Explicit Keywords, Never Symbolic Operators",
+    "Replace all traditional operators with explicit keywords: 'plus', 'minus', 'is equal to', 'concatenated with', etc. Do not use +, -, ==, *, or other overloaded symbols.",
+    "This is SR-3. Symbolic operators are ambiguous in training data. 'plus' is unambiguous. This prevents you from generating code where + means different things in different contexts.",
+    CodeGenerator)
+  
+  set gen3 to add_example(gen3, "x plus y  (not x + y)")
+  set gen3 to add_example(gen3, "x minus y  (not x - y)")
+  set gen3 to add_example(gen3, "x is equal to y  (not x == y)")
+  set gen3 to add_example(gen3, "x is greater than y  (not x > y)")
+  set gen3 to add_example(gen3, "s1 concatenated with s2  (not s1 + s2)")
+  set gen3 to add_mistake(gen3, "Using x + y for addition")
+  set gen3 to add_mistake(gen3, "Using x == y for comparison")
+  set gen3 to add_mistake(gen3, "Using && or || for boolean operations")
+  set gen3 to add_verification(gen3, "Search generated code for +, -, *, /, ==, !=, <, >, &&, ||")
+  set gen3 to add_verification(gen3, "Replace any found operators with keyword equivalents")
+  
+  set guides to append<AgentGuideline>(guides, gen3)
+  
+  // AGENT-GEN-4: Explicit Type Conversions
+  declare variable gen4 with value create_guideline(
+    "AGENT-GEN-4",
+    CodeGenerator,
+    Generation,
+    "Never Rely on Implicit Conversions",
+    "Every type conversion must be explicit via a named conversion function. If you need to convert Integer to String, call convert_int(). If you need Float to Integer, call convert_float_to_int().",
+    "This is SR-6. LLMs often generate code assuming implicit conversions. LLMPL rejects all such code at compile time, forcing you to be explicit about every type change.",
+    CodeGenerator)
+  
+  set gen4 to add_example(gen4, "convert_int(count) to convert Integer to String")
+  set gen4 to add_example(gen4, "convert_string_to_int(s) returning Result for fallible conversion")
+  set gen4 to add_example(gen4, "Cannot concatenate Integer with String without conversion")
+  set gen4 to add_mistake(gen4, "print_line('Count: ' concatenated with count) where count is Integer")
+  set gen4 to add_mistake(gen4, "Assuming Boolean converts to Integer (1/0)")
+  set gen4 to add_mistake(gen4, "Assuming empty list is false in boolean context")
+  set gen4 to add_verification(gen4, "Check that all function arguments match parameter types exactly")
+  set gen4 to add_verification(gen4, "Verify no mixing of String and Integer in operations")
+  
+  set guides to append<AgentGuideline>(guides, gen4)
+  
+  // AGENT-GEN-5: Result Types for Fallible Operations
+  declare variable gen5 with value create_guideline(
+    "AGENT-GEN-5",
+    CodeGenerator,
+    Generation,
+    "Return Result Type for Any Operation That Can Fail",
+    "If a function can fail, it must return 'Result of T or E'. The caller must match on the Result to handle both success and failure cases exhaustively.",
+    "This is SR-10. Never generate code that can silently fail. Exceptions do not exist in LLMPL. Panics do not exist. Every error is a value in the type system.",
+    CodeGenerator)
+  
+  set gen5 to add_example(gen5, "define function divide taking a as Integer and b as Integer returning Result of Integer or String")
+  set gen5 to add_example(gen5, "return success with value result_value")
+  set gen5 to add_example(gen5, "return failure with error 'division by zero'")
+  set gen5 to add_example(gen5, "match divide(x, y) with cases: case success with value v: ... case failure with error e: ... end cases")
+  set gen5 to add_mistake(gen5, "Returning Integer directly from division without checking for zero")
+  set gen5 to add_mistake(gen5, "Using try/catch or exceptions")
+  set gen5 to add_mistake(gen5, "Returning null or -1 to indicate errors")
+  set gen5 to add_verification(gen5, "Identify all operations that can fail: division, parsing, I/O, indexing")
+  set gen5 to add_verification(gen5, "Ensure their return type is Result of T or E")
+  set gen5 to add_verification(gen5, "Verify callers handle both success and failure")
+  
+  set guides to append<AgentGuideline>(guides, gen5)
+  
+  // AGENT-GEN-6: Exhaustive Pattern Matching
+  declare variable gen6 with value create_guideline(
+    "AGENT-GEN-6",
+    CodeGenerator,
+    Generation,
+    "Handle Every Case in Pattern Matching",
+    "When matching on an enumeration or Result type, you must provide a case for every variant. Partial matches are compilation errors.",
+    "This is SR-11. LLMs frequently forget edge cases. By making matches exhaustive, the compiler catches forgotten cases before runtime.",
+    CodeGenerator)
+  
+  set gen6 to add_example(gen6, "match priority with cases: case Critical: ... case High: ... case Medium: ... case Low: ... end cases")
+  set gen6 to add_example(gen6, "match result with cases: case success with value v: ... case failure with error e: ... end cases")
+  set gen6 to add_mistake(gen6, "Matching only success case and forgetting failure")
+  set gen6 to add_mistake(gen6, "Handling 3 of 4 enum variants")
+  set gen6 to add_mistake(gen6, "Using default/wildcard to hide unhandled cases")
+  set gen6 to add_verification(gen6, "List all variants of the matched type")
+  set gen6 to add_verification(gen6, "Count case statements and verify completeness")
+  
+  set guides to append<AgentGuideline>(guides, gen6)
+  
+  // AGENT-GEN-7: Planning Complex Functions
+  declare variable gen7 with value create_guideline(
+    "AGENT-GEN-7",
+    CodeGenerator,
+    Planning,
+    "Decompose Complex Logic into Helper Functions",
+    "Before generating a complex function, plan the decomposition into smaller, well-typed helper functions. Each helper should have a single clear purpose.",
+    "LLMs struggle with very long function bodies. By breaking complex logic into named helpers, you reduce the cognitive load and make verification easier.",
+    CodeGenerator)
+  
+  set gen7 to add_example(gen7, "Split validation into validate_format, validate_range, validate_consistency")
+  set gen7 to add_example(gen7, "Extract formatting logic into separate format_X functions")
+  set gen7 to add_example(gen7, "Create helper predicates like is_valid_email, is_in_range")
+  set gen7 to add_mistake(gen7, "Writing 200-line function body with deeply nested conditionals")
+  set gen7 to add_mistake(gen7, "Duplicating logic instead of extracting helpers")
+  set gen7 to add_verification(gen7, "Review function body length - consider splitting if over 30 lines")
+  set gen7 to add_verification(gen7, "Look for repeated patterns that could be extracted")
+  
+  set guides to append<AgentGuideline>(guides, gen7)
+  
+  // AGENT-GEN-8: Variable Declaration Discipline
+  declare variable gen8 with value create_guideline(
+    "AGENT-GEN-8",
+    CodeGenerator,
+    Generation,
+    "Declare Variables with Full Type Information",
+    "Always declare variables with 'declare variable name with value expr' or 'declare variable name as Type with value expr'. Be explicit about types when inference might be ambiguous.",
+    "Explicit variable declarations help both the compiler and human readers understand the code. When types are ambiguous, explicit annotations prevent subtle bugs.",
+    CodeGenerator)
+  
+  set gen8 to add_example(gen8, "declare variable count as Integer with value 0")
+  set gen8 to add_example(gen8, "declare variable items with value create_empty_list_of<String>()")
+  set gen8 to add_example(gen8, "declare variable result with value compute_value()")
+  set gen8 to add_mistake(gen8, "Using implicit variable declaration without clear type")
+  set gen8 to add_mistake(gen8, "Assuming variables can change type after declaration")
+  set gen8 to add_verification(gen8, "Verify every variable is declared before use")
+  set gen8 to add_verification(gen8, "Check that variable types are clear from context or annotation")
+  
+  set guides to append<AgentGuideline>(guides, gen8)
+  
+  return guides
+end function
+
+// -----------------------------------------------------------------------------
+// 4) Validation Guidelines
+// -----------------------------------------------------------------------------
+
+define function define_validation_guidelines returning List of AgentGuideline
+function body:
+  declare variable guides with value create_empty_list_of<AgentGuideline>()
+  
+  // AGENT-VAL-1: Syntax Verification
+  declare variable val1 with value create_guideline(
+    "AGENT-VAL-1",
+    SyntaxValidator,
+    Validation,
+    "Verify All Delimiters Are Balanced and Correct",
+    "After generating code, verify that every opening delimiter has a matching closing delimiter of the correct type at the correct nesting level.",
+    "Unbalanced delimiters are the most common generation error. Systematic verification catches these before compilation.",
+    SyntaxValidator)
+  
+  set val1 to add_verification(val1, "Count 'function body:' and verify matching 'end function'")
+  set val1 to add_verification(val1, "Count 'if' and verify matching 'end if'")
+  set val1 to add_verification(val1, "Count 'for each' and verify matching 'end for'")
+  set val1 to add_verification(val1, "Count 'match' and verify matching 'end cases'")
+  set val1 to add_verification(val1, "Use indentation to visually verify structure")
+  
+  set guides to append<AgentGuideline>(guides, val1)
+  
+  // AGENT-VAL-2: Type Consistency
+  declare variable val2 with value create_guideline(
+    "AGENT-VAL-2",
+    SemanticAnalyzer,
+    Validation,
+    "Verify Type Consistency Throughout Code",
+    "Check that function arguments match parameter types, return types match actual returns, and field access is only on defined fields.",
+    "Type errors are caught at compile time, but pre-verification speeds up the development cycle.",
+    SemanticAnalyzer)
+  
+  set val2 to add_verification(val2, "Check function call arguments against function signature")
+  set val2 to add_verification(val2, "Verify return expressions match declared return type")
+  set val2 to add_verification(val2, "Check field names exist in record definition")
+  set val2 to add_verification(val2, "Verify no implicit conversions snuck in")
+  
+  set guides to append<AgentGuideline>(guides, val2)
+  
+  // AGENT-VAL-3: Exhaustiveness Check
+  declare variable val3 with value create_guideline(
+    "AGENT-VAL-3",
+    SemanticAnalyzer,
+    Validation,
+    "Verify All Pattern Matches Are Exhaustive",
+    "For every match statement, list the type being matched and verify that all variants have corresponding case statements.",
+    "The compiler enforces this, but manual verification helps you catch it early.",
+    SemanticAnalyzer)
+  
+  set val3 to add_verification(val3, "Find all 'match X with cases:' statements")
+  set val3 to add_verification(val3, "Look up the type definition of X")
+  set val3 to add_verification(val3, "Count variants and count case statements")
+  set val3 to add_verification(val3, "Verify one-to-one correspondence")
+  
+  set guides to append<AgentGuideline>(guides, val3)
+  
+  // AGENT-VAL-4: Result Handling Check
+  declare variable val4 with value create_guideline(
+    "AGENT-VAL-4",
+    SemanticAnalyzer,
+    Validation,
+    "Verify All Result Values Are Handled",
+    "Find all function calls that return Result types and verify the result is either matched on or explicitly propagated.",
+    "Silent failure is forbidden. This check ensures errors are never ignored.",
+    SemanticAnalyzer)
+  
+  set val4 to add_verification(val4, "Identify functions returning Result types")
+  set val4 to add_verification(val4, "Find all call sites of those functions")
+  set val4 to add_verification(val4, "Verify each call is wrapped in match or returned")
+  
+  set guides to append<AgentGuideline>(guides, val4)
+  
+  return guides
+end function
+
+// -----------------------------------------------------------------------------
+// 5) Refactoring Guidelines
+// -----------------------------------------------------------------------------
+
+define function define_refactoring_guidelines returning List of AgentGuideline
+function body:
+  declare variable guides with value create_empty_list_of<AgentGuideline>()
+  
+  // AGENT-REF-1: Extract Repeated Code
+  declare variable ref1 with value create_guideline(
+    "AGENT-REF-1",
+    RefactoringAgent,
+    Refinement,
+    "Extract Common Patterns into Helper Functions",
+    "When you notice repeated code patterns, extract them into well-named helper functions. This improves maintainability and reduces generation errors.",
+    "Repeated code means repeated opportunity for errors. DRY principle applies to LLM-generated code too.",
+    RefactoringAgent)
+  
+  set ref1 to add_example(ref1, "Repeated validation logic becomes validate_X helper")
+  set ref1 to add_example(ref1, "Repeated formatting becomes format_X helper")
+  set ref1 to add_example(ref1, "Repeated conversion becomes convert_X helper")
+  
+  set guides to append<AgentGuideline>(guides, ref1)
+  
+  // AGENT-REF-2: Simplify Nested Conditions
+  declare variable ref2 with value create_guideline(
+    "AGENT-REF-2",
+    RefactoringAgent,
+    Refinement,
+    "Flatten Deeply Nested Conditionals",
+    "If you generate deeply nested if/match statements, consider early returns or extracting into helper functions to reduce nesting depth.",
+    "Deep nesting increases the chance of mismatched delimiters and logic errors.",
+    RefactoringAgent)
+  
+  set ref2 to add_example(ref2, "Use early return for error cases to avoid else nesting")
+  set ref2 to add_example(ref2, "Extract complex conditions into named predicate functions")
+  
+  set guides to append<AgentGuideline>(guides, ref2)
+  
+  return guides
+end function
+
+// -----------------------------------------------------------------------------
+// 6) Documentation Guidelines
+// -----------------------------------------------------------------------------
+
+define function define_documentation_guidelines returning List of AgentGuideline
+function body:
+  declare variable guides with value create_empty_list_of<AgentGuideline>()
+  
+  // AGENT-DOC-1: Comment Complex Logic
+  declare variable doc1 with value create_guideline(
+    "AGENT-DOC-1",
+    DocumentationWriter,
+    Refinement,
+    "Add Comments to Explain Non-Obvious Logic",
+    "Use line comments '//' to explain why code does something non-obvious. The syntax is self-documenting, but intent may not be.",
+    "LLMPL syntax is verbose and clear, but business logic and algorithmic choices still benefit from explanatory comments.",
+    DocumentationWriter)
+  
+  set doc1 to add_example(doc1, "// Using Kahn's algorithm for topological sort")
+  set doc1 to add_example(doc1, "// Decrement indegree when processing edge")
+  set doc1 to add_example(doc1, "// Early return if validation fails")
+  
+  set guides to append<AgentGuideline>(guides, doc1)
+  
+  // AGENT-DOC-2: Section Headers
+  declare variable doc2 with value create_guideline(
+    "AGENT-DOC-2",
+    DocumentationWriter,
+    Refinement,
+    "Organize Code with Section Headers",
+    "Use comment blocks with lines of dashes or equals to delineate major sections: types, helpers, main logic.",
+    "Long LLMPL files benefit from visual organization. Section headers make structure immediately obvious.",
+    DocumentationWriter)
+  
+  set doc2 to add_example(doc2, "// ------------------------")
+  set doc2 to add_example(doc2, "// 1) Type Definitions")
+  set doc2 to add_example(doc2, "// ------------------------")
+  
+  set guides to append<AgentGuideline>(guides, doc2)
+  
+  return guides
+end function
+
+// -----------------------------------------------------------------------------
+// 7) Compliance Mapping
+// -----------------------------------------------------------------------------
+
+define function define_compliance_checks returning List of ComplianceCheck
+function body:
+  declare variable checks with value create_empty_list_of<ComplianceCheck>()
+  
+  set checks to append<ComplianceCheck>(checks, create_record ComplianceCheck with fields:
+    set guideline_id to "AGENT-GEN-1"
+    set requirement_id to "ARCH-1.0"
+    set check_description to "Types are defined before use to preserve deterministic parsing guarantees."
+    set is_automated to false
+    set severity to MajorViolation
+  end fields)
+  
+  set checks to append<ComplianceCheck>(checks, create_record ComplianceCheck with fields:
+    set guideline_id to "AGENT-GEN-2"
+    set requirement_id to "SR-1"
+    set check_description to "Every block has context-rich delimiters that match SR-1."
+    set is_automated to true
+    set severity to CriticalFailure
+  end fields)
+  
+  set checks to append<ComplianceCheck>(checks, create_record ComplianceCheck with fields:
+    set guideline_id to "AGENT-GEN-3"
+    set requirement_id to "SR-3"
+    set check_description to "Symbolic operators are replaced with explicit keywords."
+    set is_automated to true
+    set severity to CriticalFailure
+  end fields)
+  
+  set checks to append<ComplianceCheck>(checks, create_record ComplianceCheck with fields:
+    set guideline_id to "AGENT-GEN-4"
+    set requirement_id to "SR-6"
+    set check_description to "All type conversions are explicit and never implicit."
+    set is_automated to false
+    set severity to CriticalFailure
+  end fields)
+  
+  set checks to append<ComplianceCheck>(checks, create_record ComplianceCheck with fields:
+    set guideline_id to "AGENT-GEN-5"
+    set requirement_id to "SR-10"
+    set check_description to "Functions that can fail return Result types with explicit handling."
+    set is_automated to false
+    set severity to CriticalFailure
+  end fields)
+  
+  set checks to append<ComplianceCheck>(checks, create_record ComplianceCheck with fields:
+    set guideline_id to "AGENT-GEN-6"
+    set requirement_id to "SR-11"
+    set check_description to "Pattern matches are exhaustive across all variants."
+    set is_automated to true
+    set severity to CriticalFailure
+  end fields)
+  
+  set checks to append<ComplianceCheck>(checks, create_record ComplianceCheck with fields:
+    set guideline_id to "AGENT-GEN-7"
+    set requirement_id to "ARCH-2.0"
+    set check_description to "Complex logic is decomposed to keep the canonical IR tractable."
+    set is_automated to false
+    set severity to MajorViolation
+  end fields)
+  
+  set checks to append<ComplianceCheck>(checks, create_record ComplianceCheck with fields:
+    set guideline_id to "AGENT-GEN-8"
+    set requirement_id to "ARCH-2.0"
+    set check_description to "Variable declarations include the information needed by the shared IR."
+    set is_automated to false
+    set severity to MajorViolation
+  end fields)
+  
+  set checks to append<ComplianceCheck>(checks, create_record ComplianceCheck with fields:
+    set guideline_id to "AGENT-VAL-1"
+    set requirement_id to "SR-1"
+    set check_description to "Validators confirm delimiter balance matches SR-1."
+    set is_automated to true
+    set severity to CriticalFailure
+  end fields)
+  
+  set checks to append<ComplianceCheck>(checks, create_record ComplianceCheck with fields:
+    set guideline_id to "AGENT-VAL-2"
+    set requirement_id to "SR-6"
+    set check_description to "Semantic analysis enforces strict type consistency."
+    set is_automated to true
+    set severity to CriticalFailure
+  end fields)
+  
+  set checks to append<ComplianceCheck>(checks, create_record ComplianceCheck with fields:
+    set guideline_id to "AGENT-VAL-3"
+    set requirement_id to "SR-11"
+    set check_description to "Semantic analysis verifies exhaustive pattern matches."
+    set is_automated to true
+    set severity to CriticalFailure
+  end fields)
+  
+  set checks to append<ComplianceCheck>(checks, create_record ComplianceCheck with fields:
+    set guideline_id to "AGENT-VAL-4"
+    set requirement_id to "SR-10"
+    set check_description to "Result-returning functions are matched or propagated."
+    set is_automated to true
+    set severity to CriticalFailure
+  end fields)
+  
+  set checks to append<ComplianceCheck>(checks, create_record ComplianceCheck with fields:
+    set guideline_id to "AGENT-REF-1"
+    set requirement_id to "NFR-1"
+    set check_description to "Repeated logic is factored out to aid transparent diagnostics."
+    set is_automated to false
+    set severity to MajorViolation
+  end fields)
+  
+  set checks to append<ComplianceCheck>(checks, create_record ComplianceCheck with fields:
+    set guideline_id to "AGENT-REF-2"
+    set requirement_id to "NFR-1"
+    set check_description to "Control flow is simplified to keep diagnostics readable."
+    set is_automated to false
+    set severity to MajorViolation
+  end fields)
+  
+  set checks to append<ComplianceCheck>(checks, create_record ComplianceCheck with fields:
+    set guideline_id to "AGENT-DOC-1"
+    set requirement_id to "NFR-1"
+    set check_description to "Non-obvious logic is documented for deterministic feedback loops."
+    set is_automated to false
+    set severity to MinorViolation
+  end fields)
+  
+  set checks to append<ComplianceCheck>(checks, create_record ComplianceCheck with fields:
+    set guideline_id to "AGENT-DOC-2"
+    set requirement_id to "NFR-1"
+    set check_description to "Section headers keep diagnostic output structured."
+    set is_automated to false
+    set severity to MinorViolation
+  end fields)
+  
+  return checks
+end function
+
+// -----------------------------------------------------------------------------
+// 8) Strategy Assembly
+// -----------------------------------------------------------------------------
+
+define function define_all_guidelines returning List of AgentGuideline
+function body:
+  declare variable all_guides with value create_empty_list_of<AgentGuideline>()
+  
+  declare variable gen_guides with value define_code_generator_guidelines()
+  declare variable val_guides with value define_validation_guidelines()
+  declare variable ref_guides with value define_refactoring_guidelines()
+  declare variable doc_guides with value define_documentation_guidelines()
+  
+  for each g in gen_guides do: set all_guides to append<AgentGuideline>(all_guides, g) end for
+  for each g in val_guides do: set all_guides to append<AgentGuideline>(all_guides, g) end for
+  for each g in ref_guides do: set all_guides to append<AgentGuideline>(all_guides, g) end for
+  for each g in doc_guides do: set all_guides to append<AgentGuideline>(all_guides, g) end for
+  
+  return all_guides
+end function
+
+define function filter_guidelines_by_role taking guides as List of AgentGuideline and role as AgentRole returning List of AgentGuideline
+function body:
+  declare variable filtered with value create_empty_list_of<AgentGuideline>()
+  for each g in guides do:
+    if g.role is equal to role then:
+      set filtered to append<AgentGuideline>(filtered, g)
+    end if
+  end for
+  return filtered
+end function
+
+define function filter_compliance_for_guidelines taking checks as List of ComplianceCheck and guides as List of AgentGuideline returning List of ComplianceCheck
+function body:
+  declare variable guideline_ids with value create_empty_list_of<String>()
+  for each g in guides do:
+    set guideline_ids to append_unique_string(guideline_ids, g.id)
+  end for
+  
+  declare variable filtered with value create_empty_list_of<ComplianceCheck>()
+  for each check in checks do:
+    if string_list_contains(guideline_ids, check.guideline_id) is equal to true then:
+      set filtered to append<ComplianceCheck>(filtered, check)
+    end if
+  end for
+  
+  return filtered
+end function
+
+define function build_prerequisites_for_role taking role as AgentRole returning StringList
+function body:
+  declare variable prereqs with value create_empty_list_of<String>()
+  match role with cases:
+    case CodeGenerator:
+      set prereqs to append<String>(prereqs, "Understanding of LLMPL syntax from example.txt")
+      set prereqs to append<String>(prereqs, "Knowledge of critical requirements from requirements.llmpl")
+      set prereqs to append<String>(prereqs, "Familiarity with Result types and exhaustive matching")
+      set prereqs to append<String>(prereqs, "Awareness that no implicit conversions exist")
+    case SyntaxValidator:
+      set prereqs to append<String>(prereqs, "Knowledge of SR-1 delimiter rules")
+      set prereqs to append<String>(prereqs, "Ability to trace nested blocks reliably")
+    case SemanticAnalyzer:
+      set prereqs to append<String>(prereqs, "Comfort with LLMPL type system semantics")
+      set prereqs to append<String>(prereqs, "Understanding of Result typing conventions")
+    case RefactoringAgent:
+      set prereqs to append<String>(prereqs, "Familiarity with helper extraction patterns")
+      set prereqs to append<String>(prereqs, "Awareness of complexity limits for readability")
+    case DocumentationWriter:
+      set prereqs to append<String>(prereqs, "Knowledge of LLMPL comment and section header style")
+      set prereqs to append<String>(prereqs, "Context on the surrounding module purpose")
+  end cases
+  return prereqs
+end function
+
+define function build_success_criteria_for_role taking role as AgentRole returning StringList
+function body:
+  declare variable success with value create_empty_list_of<String>()
+  match role with cases:
+    case CodeGenerator:
+      set success to append<String>(success, "Generated code parses deterministically")
+      set success to append<String>(success, "No symbolic operators appear in output")
+      set success to append<String>(success, "All fallible paths surface Result types")
+    case SyntaxValidator:
+      set success to append<String>(success, "Every opening delimiter has a matching context-specific close")
+      set success to append<String>(success, "Indentation structure matches explicit delimiters")
+    case SemanticAnalyzer:
+      set success to append<String>(success, "Type checks pass without implicit conversions")
+      set success to append<String>(success, "Every match expression is exhaustive")
+      set success to append<String>(success, "Result-returning functions are handled explicitly")
+    case RefactoringAgent:
+      set success to append<String>(success, "Repeated patterns are consolidated into helpers")
+      set success to append<String>(success, "Deeply nested control flow is flattened where possible")
+    case DocumentationWriter:
+      set success to append<String>(success, "Non-obvious logic paths receive brief explanatory comments")
+      set success to append<String>(success, "Major sections are clearly delineated for diagnostics")
+  end cases
+  return success
+end function
+
+define function create_agent_strategy
+  taking name as String
+  and role as AgentRole
+  and guides as List of AgentGuideline
+  and prereqs as StringList
+  and success as StringList
+  and compliance as List of ComplianceCheck
+  returning AgentStrategy
+function body:
+  return create_record AgentStrategy with fields:
+    set name to name
+    set role to role
+    set guidelines to guides
+    set prerequisite_knowledge to prereqs
+    set success_criteria to success
+    set compliance_checks to compliance
+  end fields
+end function
+
+define function define_agent_strategies taking checks as List of ComplianceCheck returning List of AgentStrategy
+function body:
+  declare variable strategies with value create_empty_list_of<AgentStrategy>()
+  declare variable all_guides with value define_all_guidelines()
+  
+  declare variable code_role with value CodeGenerator
+  declare variable code_guides with value filter_guidelines_by_role(all_guides, code_role)
+  declare variable code_prereqs with value build_prerequisites_for_role(code_role)
+  declare variable code_success with value build_success_criteria_for_role(code_role)
+  declare variable code_checks with value filter_compliance_for_guidelines(checks, code_guides)
+  set strategies to append<AgentStrategy>(strategies, create_agent_strategy(
+    "LLMPL Code Generation Playbook",
+    code_role,
+    code_guides,
+    code_prereqs,
+    code_success,
+    code_checks))
+  
+  declare variable syntax_role with value SyntaxValidator
+  declare variable syntax_guides with value filter_guidelines_by_role(all_guides, syntax_role)
+  declare variable syntax_prereqs with value build_prerequisites_for_role(syntax_role)
+  declare variable syntax_success with value build_success_criteria_for_role(syntax_role)
+  declare variable syntax_checks with value filter_compliance_for_guidelines(checks, syntax_guides)
+  set strategies to append<AgentStrategy>(strategies, create_agent_strategy(
+    "LLMPL Syntax Validation Checklist",
+    syntax_role,
+    syntax_guides,
+    syntax_prereqs,
+    syntax_success,
+    syntax_checks))
+  
+  declare variable semantic_role with value SemanticAnalyzer
+  declare variable semantic_guides with value filter_guidelines_by_role(all_guides, semantic_role)
+  declare variable semantic_prereqs with value build_prerequisites_for_role(semantic_role)
+  declare variable semantic_success with value build_success_criteria_for_role(semantic_role)
+  declare variable semantic_checks with value filter_compliance_for_guidelines(checks, semantic_guides)
+  set strategies to append<AgentStrategy>(strategies, create_agent_strategy(
+    "LLMPL Semantic Assurance Checklist",
+    semantic_role,
+    semantic_guides,
+    semantic_prereqs,
+    semantic_success,
+    semantic_checks))
+  
+  declare variable ref_role with value RefactoringAgent
+  declare variable ref_guides with value filter_guidelines_by_role(all_guides, ref_role)
+  declare variable ref_prereqs with value build_prerequisites_for_role(ref_role)
+  declare variable ref_success with value build_success_criteria_for_role(ref_role)
+  declare variable ref_checks with value filter_compliance_for_guidelines(checks, ref_guides)
+  set strategies to append<AgentStrategy>(strategies, create_agent_strategy(
+    "LLMPL Refactoring Guide",
+    ref_role,
+    ref_guides,
+    ref_prereqs,
+    ref_success,
+    ref_checks))
+  
+  declare variable doc_role with value DocumentationWriter
+  declare variable doc_guides with value filter_guidelines_by_role(all_guides, doc_role)
+  declare variable doc_prereqs with value build_prerequisites_for_role(doc_role)
+  declare variable doc_success with value build_success_criteria_for_role(doc_role)
+  declare variable doc_checks with value filter_compliance_for_guidelines(checks, doc_guides)
+  set strategies to append<AgentStrategy>(strategies, create_agent_strategy(
+    "LLMPL Documentation Standards",
+    doc_role,
+    doc_guides,
+    doc_prereqs,
+    doc_success,
+    doc_checks))
+  
+  return strategies
+end function
+
+// -----------------------------------------------------------------------------
+// 9) Reporting Functions
+// -----------------------------------------------------------------------------
+
+define function print_document_intro returning Unit
+function body:
+  call print_line("=============================================================================")
+  call print_line("LLMPL Agent Strategy Document")
+  call print_line("=============================================================================")
+  call print_line("")
+  call print_line("This document describes how LLM agents should approach writing LLMPL code.")
+  call print_line("It is itself written in LLMPL, demonstrating the language's expressiveness")
+  call print_line("for meta-programming, self-documentation, and traceability to requirements.")
+  call print_line("")
+end function
+
+define function print_guideline taking g as AgentGuideline returning Unit
+function body:
+  call print_line("================================================================================")
+  call print_line(g.id concatenated with ": " concatenated with g.title)
+  call print_line("================================================================================")
+  call print_line("")
+  call print_line("Role: " concatenated with format_role(g.role))
+  call print_line("Phase: " concatenated with format_phase(g.phase))
+  call print_line("")
+  call print_line("Description:")
+  call print_line("  " concatenated with g.description)
+  call print_line("")
+  call print_line("Rationale:")
+  call print_line("  " concatenated with g.rationale)
+  call print_line("")
+  
+  if length<String>(g.examples) is greater than 0 then:
+    call print_line("Examples:")
+    for each ex in g.examples do:
+      call print_line("  + " concatenated with ex)
+    end for
+    call print_line("")
+  end if
+  
+  if length<String>(g.common_mistakes) is greater than 0 then:
+    call print_line("Common Mistakes to Avoid:")
+    for each mistake in g.common_mistakes do:
+      call print_line("  × " concatenated with mistake)
+    end for
+    call print_line("")
+  end if
+  
+  if length<String>(g.verification_steps) is greater than 0 then:
+    call print_line("Verification Steps:")
+    for each step in g.verification_steps do:
+      call print_line("  ✓ " concatenated with step)
+    end for
+    call print_line("")
+  end if
+end function
+
+define function format_role taking r as AgentRole returning String
+function body:
+  match r with cases:
+    case CodeGenerator: return "Code Generator"
+    case SyntaxValidator: return "Syntax Validator"
+    case SemanticAnalyzer: return "Semantic Analyzer"
+    case RefactoringAgent: return "Refactoring Agent"
+    case DocumentationWriter: return "Documentation Writer"
+  end cases
+end function
+
+define function format_phase taking p as StrategyPhase returning String
+function body:
+  match p with cases:
+    case Planning: return "Planning"
+    case Generation: return "Generation"
+    case Validation: return "Validation"
+    case Refinement: return "Refinement"
+  end cases
+end function
+
+define function format_compliance_level taking level as ComplianceLevel returning String
+function body:
+  match level with cases:
+    case FullyCompliant: return "Fully Compliant"
+    case MinorViolation: return "Minor Violation"
+    case MajorViolation: return "Major Violation"
+    case CriticalFailure: return "Critical Failure"
+  end cases
+end function
+
+define function print_strategy_summary taking strat as AgentStrategy returning Unit
+function body:
+  declare variable covered_requirements with value create_empty_list_of<String>()
+  for each check in strat.compliance_checks do:
+    set covered_requirements to append_unique_string(covered_requirements, check.requirement_id)
+  end for
+  
+  call print_line("=============================================================================")
+  call print_line(strat.name)
+  call print_line("=============================================================================")
+  call print_line("")
+  call print_line("Primary Role: " concatenated with format_role(strat.role))
+  call print_line("Guidelines Covered: " concatenated with convert_int(length<AgentGuideline>(strat.guidelines)))
+  call print_line("Traceability Links: " concatenated with convert_int(length<ComplianceCheck>(strat.compliance_checks)))
+  call print_line("Requirements Covered: " concatenated with convert_int(length<String>(covered_requirements)))
+  call print_line("")
+  call print_line("PREREQUISITE KNOWLEDGE")
+  call print_line("-------------------------------------------------------------------------------")
+  call print_line("")
+  for each prereq in strat.prerequisite_knowledge do:
+    call print_line("  • " concatenated with prereq)
+  end for
+  call print_line("")
+  call print_line("SUCCESS CRITERIA")
+  call print_line("-------------------------------------------------------------------------------")
+  call print_line("")
+  for each criterion in strat.success_criteria do:
+    call print_line("  ✓ " concatenated with criterion)
+  end for
+  call print_line("")
+end function
+
+define function print_strategy_compliance taking strat as AgentStrategy returning Unit
+function body:
+  if length<ComplianceCheck>(strat.compliance_checks) is equal to 0 then:
+    call print_line("TRACEABILITY")
+    call print_line("-------------------------------------------------------------------------------")
+    call print_line("")
+    call print_line("  No compliance checks are currently defined for this role.")
+    call print_line("")
+    return
+  end if
+  
+  call print_line("TRACEABILITY")
+  call print_line("-------------------------------------------------------------------------------")
+  call print_line("")
+  for each check in strat.compliance_checks do:
+    declare variable mode as String with value "Manual"
+    if check.is_automated is equal to true then:
+      set mode to "Automated"
+    end if
+    call print_line("  - " concatenated with check.guideline_id concatenated with " -> " concatenated with check.requirement_id)
+    call print_line("    " concatenated with mode concatenated with " check, severity: " concatenated with format_compliance_level(check.severity))
+    call print_line("    " concatenated with check.check_description)
+    call print_line("")
+  end for
+end function
+
+define function print_compliance_overview taking checks as List of ComplianceCheck returning Unit
+function body:
+  declare variable requirement_ids with value create_empty_list_of<String>()
+  declare variable automated_count as Integer with value 0
+  
+  for each check in checks do:
+    set requirement_ids to append_unique_string(requirement_ids, check.requirement_id)
+    if check.is_automated is equal to true then:
+      set automated_count to automated_count plus 1
+    end if
+  end for
+  
+  call print_line("=============================================================================")
+  call print_line("GLOBAL TRACEABILITY OVERVIEW")
+  call print_line("=============================================================================")
+  call print_line("")
+  call print_line("Total Compliance Checks: " concatenated with convert_int(length<ComplianceCheck>(checks)))
+  call print_line("Automated Checks: " concatenated with convert_int(automated_count))
+  call print_line("Requirements Covered: " concatenated with convert_int(length<String>(requirement_ids)))
+  call print_line("")
+  
+  for each requirement in requirement_ids do:
+    call print_line(requirement concatenated with ":")
+    for each check in checks do:
+      if check.requirement_id is equal to requirement then:
+        call print_line("  - " concatenated with check.guideline_id concatenated with " (" concatenated with format_compliance_level(check.severity) concatenated with ")")
+      end if
+    end for
+    call print_line("")
+  end for
+end function
+
+define function print_strategy_section_break returning Unit
+function body:
+  call print_line("=============================================================================")
+  call print_line("")
+end function
+
+// -----------------------------------------------------------------------------
+// 10) Meta-Circular Application
+// -----------------------------------------------------------------------------
+
+define function verify_self_compliance
+  taking strategies as List of AgentStrategy
+  and checks as List of ComplianceCheck
+  returning ComplianceLevel
+function body:
+  declare variable violations as Integer with value 0
+  
+  // Collect all guideline identifiers
+  declare variable all_guideline_ids with value create_empty_list_of<String>()
+  for each strat in strategies do:
+    for each guide in strat.guidelines do:
+      set all_guideline_ids to append_unique_string(all_guideline_ids, guide.id)
+    end for
+  end for
+  
+  // Every compliance check must reference a known guideline
+  for each check in checks do:
+    if string_list_contains(all_guideline_ids, check.guideline_id) is equal to false then:
+      set violations to violations plus 1
+    end if
+  end for
+  
+  // Ensure every critical requirement is covered by at least one check
+  declare variable critical_requirements with value create_empty_list_of<String>()
+  set critical_requirements to append_unique_string(critical_requirements, "ARCH-1.0")
+  set critical_requirements to append_unique_string(critical_requirements, "ARCH-2.0")
+  set critical_requirements to append_unique_string(critical_requirements, "SR-1")
+  set critical_requirements to append_unique_string(critical_requirements, "SR-3")
+  set critical_requirements to append_unique_string(critical_requirements, "SR-6")
+  set critical_requirements to append_unique_string(critical_requirements, "SR-10")
+  set critical_requirements to append_unique_string(critical_requirements, "SR-11")
+  set critical_requirements to append_unique_string(critical_requirements, "NFR-1")
+  
+  for each requirement in critical_requirements do:
+    declare variable covered as Boolean with value false
+    for each check in checks do:
+      if check.requirement_id is equal to requirement then:
+        set covered to true
+      end if
+    end for
+    if covered is equal to false then:
+      set violations to violations plus 2
+    end if
+  end for
+  
+  // Make sure every guideline has at least one compliance check
+  for each guideline_id in all_guideline_ids do:
+    declare variable linked as Boolean with value false
+    for each check in checks do:
+      if check.guideline_id is equal to guideline_id then:
+        set linked to true
+      end if
+    end for
+    if linked is equal to false then:
+      set violations to violations plus 1
+    end if
+  end for
+  
+  // Strategies must contain guidelines and compliance links
+  for each strat in strategies do:
+    if length<AgentGuideline>(strat.guidelines) is equal to 0 then:
+      set violations to violations plus 2
+    end if
+    if length<ComplianceCheck>(strat.compliance_checks) is equal to 0 then:
+      set violations to violations plus 1
+    end if
+  end for
+  
+  if violations is equal to 0 then:
+    return FullyCompliant
+  end if
+  if violations is less than or equal to 2 then:
+    return MinorViolation
+  end if
+  if violations is less than or equal to 5 then:
+    return MajorViolation
+  end if
+  return CriticalFailure
+end function
+
+// -----------------------------------------------------------------------------
+// 11) MAIN
+// -----------------------------------------------------------------------------
+
+define function main taking argv as List of String returning Result of Integer or String
+function body:
+  // Prepare compliance mapping and strategies
+  declare variable compliance_checks with value define_compliance_checks()
+  declare variable strategies with value define_agent_strategies(compliance_checks)
+  
+  // Document introduction
+  call print_document_intro()
+  
+  // Report each strategy by role
+  for each strat in strategies do:
+    call print_strategy_summary(strat)
+    call print_strategy_compliance(strat)
+    call print_strategy_section_break()
+    for each guide in strat.guidelines do:
+      call print_guideline(guide)
+      call print_strategy_section_break()
+    end for
+  end for
+  
+  // Global compliance overview
+  call print_compliance_overview(compliance_checks)
+  
+  // Verify this file follows its own advice
+  declare variable compliance with value verify_self_compliance(strategies, compliance_checks)
+  call print_line("=============================================================================")
+  call print_line("META-CIRCULAR VERIFICATION")
+  call print_line("=============================================================================")
+  call print_line("")
+  call print_line("This file (AGENTS.llmpl) was checked against its own guidelines.")
+  match compliance with cases:
+    case FullyCompliant:
+      call print_line("Result: FULLY COMPLIANT")
+      call print_line("This file successfully follows all the guidelines it prescribes.")
+    case MinorViolation:
+      call print_line("Result: Minor violations detected")
+    case MajorViolation:
+      call print_line("Result: Major violations detected")
+    case CriticalFailure:
+      call print_line("Result: Critical failures detected")
+  end cases
+  call print_line("")
+  
+  // Final guidance
+  call print_line("=============================================================================")
+  call print_line("GUIDANCE FOR LLM AGENTS")
+  call print_line("=============================================================================")
+  call print_line("")
+  call print_line("When generating LLMPL code:")
+  call print_line("")
+  call print_line("1. START with type definitions (records, enumerations, type aliases)")
+  call print_line("2. PLAN function decomposition before generating complex logic")
+  call print_line("3. GENERATE using only keywords, never symbolic operators")
+  call print_line("4. CLOSE every block with context-specific delimiters")
+  call print_line("5. CONVERT types explicitly, never assume implicit conversion")
+  call print_line("6. RETURN Result types for any operation that can fail")
+  call print_line("7. MATCH exhaustively on all enumerations and Result types")
+  call print_line("8. VERIFY delimiter balance, type consistency, and exhaustiveness")
+  call print_line("9. REFACTOR repeated patterns into helpers")
+  call print_line("10. DOCUMENT non-obvious logic with comments")
+  call print_line("")
+  call print_line("Remember: The compiler is your ally. Let it catch errors, don't fight it.")
+  call print_line("The verbosity is intentional. The explicitness prevents bugs.")
+  call print_line("")
+  call print_line("=============================================================================")
+  call print_line("END OF AGENT GUIDELINES")
+  call print_line("=============================================================================")
+  
+  return success with value 0
+end function
+
